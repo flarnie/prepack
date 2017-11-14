@@ -9,6 +9,7 @@
 
 /* @flow */
 
+import invariant from "../lib/invariant.js";
 let FatalError = require("../lib/errors.js").FatalError;
 let prepackSources = require("../lib/prepack-node.js").prepackSources;
 
@@ -167,6 +168,28 @@ function execInContext(code) {
     },
   });
   return (result + logOutput).trim();
+}
+
+function parseFunctionOrderings(code: string): Array<number> {
+  const orders = [];
+  const functionOrderPattern = /Function ordering: (\d+)/g;
+  let match;
+  while ((match = functionOrderPattern.exec(code)) != null) {
+    orders.push(match[1]);
+  }
+  return orders;
+}
+
+function verifyFunctionOrderings(code: string): boolean {
+  const orders = parseFunctionOrderings(code);
+  for (let i = 1; i < orders.length; ++i) {
+    invariant(orders[i] !== orders[i - 1]);
+    if (orders[i] < orders[i - 1]) {
+      console.log(chalk.red(`Funtion ordering is not preserved: function ${orders[i - 1]} is before ${orders[i]}`));
+      return false;
+    }
+  }
+  return true;
 }
 
 function runTest(name, code, options, args) {
@@ -351,6 +374,9 @@ function runTest(name, code, options, args) {
         }
         if (expected !== actual) {
           console.log(chalk.red("Output mismatch!"));
+          break;
+        }
+        if (!verifyFunctionOrderings(codeToRun)) {
           break;
         }
         // Test the number of clone functions generated with the inital prepack call
